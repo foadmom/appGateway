@@ -1,0 +1,33 @@
+
+Messages should have short TTL in the queue. Old messages like status have are
+not of any value. Only the latest is of interest.
+
+How to:
+    Read and Process messages
+        - One goroutine per message type/queue
+        - For goroutine:
+            - should handle it's own panic so as to affect others
+            - read message
+            - process
+            - go back to reading queue
+        -For HeartBeat/Health goroutine:
+            - analyse and verify message
+            - update service cache
+            - log status in a time series DB
+        - For Service Discovery :
+            - analyse and verify message
+            - check cache and get the next available service info
+            - return service discovery info
+        - For Config update
+            - analyse and verify message
+            - create a new config cache 
+            - swap cache pointer
+
+    Cache Management:
+        - should all accesses be sync.Locked ?
+        - create a cache data structure
+        - what is the key to finding items in cache ?
+
+
+
+

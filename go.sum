@@ -1,0 +1,4 @@
+github.com/foadmom/common v0.0.0-20230727141636-fd415f4f6a78 h1:nxyCDBxEAnCI5N8l9C7G07xTo/+EvFbP3qcd1QnWdL0=
+github.com/foadmom/common v0.0.0-20230727141636-fd415f4f6a78/go.mod h1:PGM6tezqjSIUHRfK8ygjvxZdArWnClCdsBWXiatVA0Q=
+github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
+github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
