@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	m "github.com/foadmom/appGateway/heartBeat"
 )
@@ -61,10 +62,9 @@ func (e ServiceMapElement) updateService(service m.Service) {
 	for _index, _service := range _list {
 		if (_service.Host == service.Host) &&
 			(_service.Port == service.Port) {
-			// this is an existing service there we should update
-			// the same service status
+			// this is an existing service, so update
+			// the service info
 			_list[_index] = service
-			e.List = _list
 			return
 		}
 	}
@@ -75,14 +75,39 @@ func (e ServiceMapElement) updateService(service m.Service) {
 }
 
 // ========================================================
+// removes the last item in the slice and copies it into
+// the spot for the service you wish to delete, then
+// returns the slice from top to end -1
+// ========================================================
+func removeService(s []m.Service, index int) []m.Service {
+	s[index] = s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+// ========================================================
 // every so often we check for stale service entries
 // if the timeStamp is older than a threshold
 // remove the entry. If the service starts again
 // it will register again
 // ========================================================
 func checkForStaleServices() {
+	fmt.Printf("=============================================\nStarting StaleChceck\n=============================================\n")
 	ServiceCache.lock.Lock()
 	defer ServiceCache.lock.Unlock()
+
+	var _now time.Time = time.Now()
+	for _name, _service := range ServiceCache.cache {
+
+		fmt.Printf("service name=%s  Index=%d\n", _name, _service.Index)
+		for _index, _elem := range _service.List {
+			_diff := _now.Sub(_elem.LastUpdated).Seconds()
+			if _diff > 5 {
+				fmt.Printf("removing    %v\n", _elem)
+				_service.List = removeService(_service.List, _index)
+				ServiceCache.cache[_name] = _service
+			}
+		}
+	}
 
 }
 
@@ -101,7 +126,7 @@ func UpdateServiceInfo(service m.Service) error {
 	if _found {
 		_elem.updateService(service)
 	} else {
-		addNewService(service)
+		_err = addNewService(service)
 	}
 	return _err
 }
