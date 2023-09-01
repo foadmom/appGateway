@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -16,14 +17,20 @@ type cacheType struct {
 
 var ServiceCache cacheType = cacheType{}
 
-func init() {
-	ServiceCache.cache = make(map[string]ServiceMapElement)
-}
-
 type ServiceMapElement struct {
 	// Name  string    `json:"name"`
 	List  []m.Service `json:"list"`
 	Index int         `json:"index"` // for load balancing. used to indicate the last service used
+}
+
+const checkInterval = 500 * time.Millisecond
+const (
+	ACTIVE = "active"
+)
+
+func init() {
+	ServiceCache.cache = make(map[string]ServiceMapElement)
+	go periodicCacheCheck()
 }
 
 // ============================================================================
@@ -80,8 +87,9 @@ func (e ServiceMapElement) updateService(service m.Service) {
 // returns the slice from top to end -1
 // ========================================================
 func removeService(s []m.Service, index int) []m.Service {
-	s[index] = s[len(s)-1]
-	return s[:len(s)-1]
+	var _len int = len(s)
+	s[index] = s[_len-1]
+	return s[:_len-1]
 }
 
 // ========================================================
@@ -90,29 +98,89 @@ func removeService(s []m.Service, index int) []m.Service {
 // remove the entry. If the service starts again
 // it will register again
 // ========================================================
-func checkForStaleServices() {
-	fmt.Printf("=============================================\nStarting StaleChceck\n=============================================\n")
+func periodicCacheCheck() {
+	fmt.Println("******** periodicCacheCheck started")
+	for {
+		checkCache()
+		time.Sleep(checkInterval)
+	}
+}
+
+func checkCache() {
 	ServiceCache.lock.Lock()
 	defer ServiceCache.lock.Unlock()
 
-	var _now time.Time = time.Now()
-	for _name, _service := range ServiceCache.cache {
+	for _name, _serviceMapElement := range ServiceCache.cache {
+		checkForStaleServices(_serviceMapElement)
+		if len(ServiceCache.cache[_name].List) == 0 {
+			delete(ServiceCache.cache, _name)
+		}
+	}
+}
 
-		fmt.Printf("service name=%s  Index=%d\n", _name, _service.Index)
-		for _index, _elem := range _service.List {
+// ========================================================
+// every so often we check for stale service entries
+// if the timeStamp is older than a threshold
+// remove the entry. If the service starts again
+// it will register again
+// ========================================================
+func checkForStaleServices(serviceMapElem ServiceMapElement) bool {
+	var _staleServiceFound bool = false
+
+	var _now time.Time = time.Now()
+	if len(serviceMapElem.List) > 0 {
+		for _index, _elem := range serviceMapElem.List {
 			_diff := _now.Sub(_elem.LastUpdated).Seconds()
 			if _diff > 5 {
-				fmt.Printf("removing    %v\n", _elem)
-				_service.List = removeService(_service.List, _index)
-				ServiceCache.cache[_name] = _service
+				var _serviceName string = _elem.Name
+				serviceMapElem.List = removeService(serviceMapElem.List, _index)
+				ServiceCache.cache[_serviceName] = serviceMapElem
+				_staleServiceFound = true
+				break
 			}
 		}
 	}
+	return _staleServiceFound
+}
 
+func nextAvailableService(serviceMap ServiceMapElement) m.Service {
+	var _service m.Service
+	var _index int
+
+	if serviceMap.Index == len(serviceMap.List)-1 {
+		// wrap the index around
+		serviceMap.Index = 0
+	}
+	for _index, _service = range serviceMap.List {
+		if _service.Status == ACTIVE && _index > serviceMap.Index {
+			return _service
+		}
+	}
+
+	return _service
+}
+
+func getNextAvailableService(name string) (m.Service, error) {
+	var _err error = errors.New("No service found for " + name)
+	var _service m.Service
+
+	_serviceMap, _found := ServiceCache.cache[name]
+	if _found == true {
+		_len := len(_serviceMap.List)
+		if _len > 0 {
+			if _serviceMap.Index == -1 {
+				//                _service =
+			}
+		} else {
+			_err = fmt.Errorf("No Active service available for %s", name)
+		}
+	}
+
+	return _service, _err
 }
 
 // ============================================================================
-// ============== service functions
+// ============== service (External) functions
 // ============================================================================
 // ========================================================
 // update/add a service
@@ -131,12 +199,14 @@ func UpdateServiceInfo(service m.Service) error {
 	return _err
 }
 
-func ServiceDiscovery() (m.Service, error) {
+func ServiceDiscovery(name string) (m.Service, error) {
 	var _err error
 	var _service m.Service
 
 	ServiceCache.lock.Lock()
 	defer ServiceCache.lock.Unlock()
+
+	_service, _err = getNextAvailableService(name)
 
 	return _service, _err
 }
@@ -145,6 +215,8 @@ func ServiceDiscovery() (m.Service, error) {
 // ============== debug functions
 // ============================================================================
 func PrintCache() {
+	ServiceCache.lock.Lock()
+	defer ServiceCache.lock.Unlock()
 	for _name, _service := range ServiceCache.cache {
 		fmt.Printf("service name=%s  Index=%d\n", _name, _service.Index)
 		for _, _elem := range _service.List {

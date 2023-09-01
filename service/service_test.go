@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -43,29 +42,26 @@ func Test_addNewService(t *testing.T) {
 
 	PrintCache()
 
-	var _staleTimeDelay time.Duration = 500 * time.Millisecond
-	var i int = 12
+	var _loopCounter int = 20
 	for {
-		time.Sleep(_staleTimeDelay)
-		checkForStaleServices()
-		printCache(t)
-
-		fmt.Println()
-		i--
-		if i == 0 {
+		time.Sleep(1 * time.Second)
+		PrintCache()
+		if _loopCounter == 0 {
 			break
 		}
+		_loopCounter--
 	}
-
 }
 
 // ============================================================================
 // ============== debug functions
 // ============================================================================
 func printCache(t *testing.T) {
+	ServiceCache.lock.Lock()
+	defer ServiceCache.lock.Unlock()
 	for _name, _service := range ServiceCache.cache {
-		t.Logf("service name=%s  Index=%d\n", _name, _service.Index)
-		for _, _elem := range _service.List {
+		for _index, _elem := range _service.List {
+			t.Logf("service name=%s  Index=%d", _name, _index)
 			t.Logf("    %v\n", _elem)
 		}
 	}

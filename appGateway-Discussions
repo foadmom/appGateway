@@ -30,4 +30,7 @@ How to:
 
 
 
-
+packages:
+    common/message:
+        Header
+        GenericMessage
