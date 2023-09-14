@@ -1,27 +1,32 @@
 package comms
 
-import comms "github.com/foadmom/appGateway/comms/nats"
+import (
+	"encoding/json"
 
-type CommsInterface interface {
-	GetMessage() ([]byte, error)
-	PutMessage(b []byte) error
-}
+	s "github.com/foadmom/appGateway/heartBeat"
+	comms "github.com/foadmom/common/comms"
+)
 
-var implementation CommsInterface
+var implementation comms.CommsInterface
+var Channel string = "appGateway"
 
 func init() {
 	implementation = comms.Instance()
 }
 
-func GetMessage() ([]byte, error) {
+func GetMessage(channel string) ([]byte, error) {
 	var _message []byte
 	var _err error
 
-	_message, _err = implementation.GetMessage()
+	_message, _err = implementation.GetMessage(channel)
 
 	return []byte(_message), _err
 }
 
-func PutMessage(b []byte) error {
-	return nil
+func SendHearBeat(message s.ServiceMessage) error {
+	b, _err := json.Marshal(message)
+	if _err == nil {
+		_err = implementation.PutMessage(Channel, b)
+	}
+	return _err
 }
